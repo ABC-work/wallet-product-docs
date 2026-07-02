@@ -1,5 +1,13 @@
 # Admin 钱包后台产品文档
 
+> Scope note, 2026-07-02:
+> This document is a future Finance Console reference. For the current Collab
+> platform implementation, use `README.md` as the source of truth. Collab V0
+> should not implement a full stored-value wallet, creator-initiated withdrawal
+> flow, reconciliation center, or complex finance approval workflow. The current
+> product should first ship Creator Payment tracking from confirmed
+> `CampaignMatch` records plus Payee Center data collection.
+
 ## 1. 产品概述
 
 ### 1.1 产品名称

@@ -1,810 +1,536 @@
-# 钱包功能产品文档
+# Collab Payment & Payee PRD
 
-## 1. 产品概述
+Version: v1.1
+Date: 2026-07-02
+Platform: Airacle Collab (`/home/oyzh888/collab-payment-git`)
+Scope: Creator collaboration payment tracking, payee profile, receiving account, and social account verification
+Status: Platform-specific rewrite replacing the generic wallet / withdrawal PRD
 
-### 1.1 产品名称
+## 1. Product Positioning
 
-我的钱包 / Wallet
+Collab Payment is not a stored-value wallet, consumer wallet, or creator-initiated withdrawal system.
 
-### 1.2 产品定位
+It is the payment operations layer for Airacle's creator collaboration workflow. It tracks collaboration fees owed to creators after a campaign match is confirmed, helps creators provide payee information, and lets Admin record payment progress.
 
-钱包模块用于为平台合作方、广告主、流量主、代理商或任务参与者提供收益查看、结算记录查询、可提现余额管理和提现申请能力。
+V0 payment execution happens outside Collab. Admin records payment status manually in the platform.
 
-该钱包不是 C 端消费钱包，而是 B 端收益结算钱包，核心关注：
-
-```text
-收益产生 -> 待结算 -> 已到账 -> 可提现 -> 提现申请 -> 打款完成
-```
-
-### 1.3 目标用户
-
-- 广告联盟合作方
-- 流量主 / Publisher
-- 推广任务参与者
-- 商务合作伙伴
-- 海外渠道代理
-- 内容分发合作方
-
-### 1.4 核心价值
-
-- 用户可清楚查看累计收益、可提现金额和结算状态。
-- 平台可标准化管理收益结算、提现、出款和财务对账。
-- 降低用户对“钱在哪里、何时到账、能否提现”的疑问。
-- 为跨境付款、PayPal、银行账户提现提供统一入口。
-
-## 2. 业务目标
-
-### 2.1 用户目标
-
-用户希望快速知道：
-
-- 当前一共赚了多少钱
-- 有多少钱可以提现
-- 哪些收益还在结算中
-- 哪些收益已经到账
-- 哪些金额已经提现
-- 提现到哪个账户
-- 提现是否成功
-
-### 2.2 平台目标
-
-平台需要实现：
-
-- 收益数据可追踪
-- 结算状态可管理
-- 提现申请可审核
-- 出款流程可对接第三方支付服务商
-- 财务流水可对账
-- 异常资金可冻结、扣减或回滚
-
-## 3. 功能范围
-
-### 3.1 本期包含
-
-- 钱包首页
-- 总金额展示
-- 可提现余额展示
-- 待结算记录
-- 已到账记录
-- 已提现记录
-- 日期筛选
-- 提现入口
-- 提现申请
-- 收款账户校验
-- 提现状态展示
-- 空状态展示
-- 基础错误提示
-
-### 3.2 本期不包含
-
-- 复杂财务报表
-- 多币种兑换
-- 自动报税
-- 发票开具
-- 资金理财
-- 钱包充值
-- 用户间转账
-
-## 4. 核心业务链路
-
-### 4.1 收益结算链路
+Core flow:
 
 ```text
-用户产生收益
--> 平台生成收益记录
--> 收益进入待结算
--> 到达结算周期
--> 平台审核收益
--> 收益转为已到账
--> 可提现余额增加
+CampaignMatch confirmed
+-> Admin creates creator payment
+-> Creator completes payee profile and receiving account
+-> Payment becomes ready to pay
+-> Admin marks payment as invoiced / paid / failed
+-> Creator sees payment progress in Payee Center
+-> Activity is retained for operations review
 ```
 
-### 4.2 提现链路
+## 2. Existing Collab Context
+
+The current Collab platform already includes:
+
+- Brand Client management.
+- Campaign creation and management.
+- Creator Pipeline.
+- Campaign Match Board.
+- `CampaignMatch.confirmedPrice`.
+- Admin Payment Tracker demo at `/admin/payments`.
+- Payee Portal demo at `/portal/payee`.
+- YouTube social OAuth demo.
+- Activity logs.
+
+The payment PRD should extend these existing objects instead of introducing a standalone wallet product.
+
+## 3. Product Goals
+
+1. Admin can create and manage payment records from confirmed campaign matches.
+2. Creator can complete personal/payee information required for receiving collaboration payments.
+3. Creator can add a SWIFT receiving account.
+4. Creator can verify social accounts used for collaboration eligibility.
+5. Admin can see whether a payment is blocked by missing payee information.
+6. Admin can manually update payment status and retain an audit trail.
+7. Creator can view pending, paid, and failed payment records.
+
+## 4. Non-Goals
+
+V0 does not include:
+
+- Creator-initiated withdrawals.
+- Stored wallet balance.
+- Wallet recharge.
+- User-to-user transfer.
+- Balance freeze / unfreeze ledger.
+- Real payment gateway execution.
+- Automatic PayPal, Airwallex, or bank payout API calls.
+- Full reconciliation center.
+- Tax reporting.
+- Invoice generation.
+- Multi-currency FX conversion.
+- Complex finance approval workflow.
+- General-purpose financial ledger.
+
+These may become future finance features after the basic payment operations workflow is validated.
+
+## 5. Users
+
+### 5.1 Admin / Operator
+
+Internal Airacle user responsible for campaign operations and creator payment tracking.
+
+Primary needs:
+
+- Know which confirmed creator collaborations need payment.
+- See whether creator payee information is complete.
+- Record invoice/payment progress.
+- Mark payment success or failure.
+- Leave notes for operations and finance follow-up.
+
+### 5.2 Creator / Payee
+
+External creator or collaboration participant.
+
+Primary needs:
+
+- Complete personal information.
+- Verify collaboration-related social accounts.
+- Add receiving account information.
+- See expected and completed collaboration payments.
+- Understand payment failure reasons and required next actions.
+
+### 5.3 Finance
+
+Future or lightweight V0 internal role. In V0, finance actions can be represented by Admin/Operator.
+
+Primary needs:
+
+- Confirm payment amounts and recipient details.
+- Track manual payment status.
+- Review payment history.
+
+## 6. Information Architecture
+
+### Admin
 
 ```text
-用户点击提现
--> 系统校验提现条件
--> 用户选择收款方式
--> 输入提现金额
--> 确认提现信息
--> 创建提现申请
--> 冻结提现金额
--> 平台审核
--> 调用付款服务商出款
--> 出款成功
--> 更新为已提现
+Admin
+├── Campaign Management
+├── Match Board
+└── Payment Tracker
+    ├── Payment list
+    ├── Payment detail
+    ├── Create from confirmed match
+    ├── Payee readiness
+    └── Payment status update
 ```
 
-### 4.3 提现失败链路
+### Creator
 
 ```text
-用户提交提现
--> 金额被冻结
--> 出款失败
--> 提现申请状态变为失败
--> 冻结金额释放
--> 金额退回可提现余额
--> 用户查看失败原因
--> 用户重新发起提现
+Payee Center
+├── Account Verification
+├── Personal Info
+├── Receiving Account
+└── Payments
+    ├── Pending payment
+    ├── Paid
+    └── Failed / Action Required
 ```
 
-## 5. 页面结构
+`/portal/payee` should be treated as Payee Center, not a full wallet.
 
-### 5.1 页面名称
+## 7. Data Model
 
-我的钱包
+### 7.1 Existing Objects To Reuse
 
-### 5.2 页面入口
+- `users`
+- `creator_profiles`
+- `social_accounts`
+- `brand_clients`
+- `campaigns`
+- `campaign_matches`
+- `activity_logs`
 
-左侧导航：
+### 7.2 New Recommended Objects
+
+#### `payee_profiles`
+
+One per creator profile.
+
+Fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Payee profile ID |
+| `creator_profile_id` | Linked creator |
+| `user_id` | Linked auth user, if available |
+| `legal_name` | Payee legal or beneficiary name |
+| `phone_code` | Phone country code |
+| `phone_number` | Phone number |
+| `country` | Country/region |
+| `province` | Province, if applicable |
+| `city` | City |
+| `state` | State, if applicable |
+| `address` | Detailed address |
+| `status` | `incomplete`, `complete`, `needs_review`, `rejected` |
+| `created_at` | Created timestamp |
+| `updated_at` | Updated timestamp |
+
+#### `payee_accounts`
+
+Receiving accounts for payments.
+
+Fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Account ID |
+| `payee_profile_id` | Linked payee profile |
+| `method` | `swift_bank` for V0 |
+| `beneficiary_name` | Beneficiary name |
+| `country` | Beneficiary country |
+| `currency` | Account currency |
+| `bank_name` | Bank name |
+| `bank_country` | Bank country |
+| `account_number_encrypted` | Encrypted account number or IBAN |
+| `account_last4` | Last 4 digits for display |
+| `swift_bic` | SWIFT/BIC code |
+| `bank_address` | Bank address |
+| `beneficiary_address` | Beneficiary address |
+| `status` | `draft`, `submitted`, `verified`, `rejected`, `frozen`, `disabled` |
+| `rejection_reason` | Reason if rejected |
+| `created_at` | Created timestamp |
+| `updated_at` | Updated timestamp |
+
+V0 may use manual verification. Automatic bank account verification is out of scope.
+
+#### `social_verifications`
+
+Social account verification records.
+
+Fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Verification ID |
+| `creator_profile_id` | Linked creator |
+| `platform` | `youtube`, `tiktok`, `instagram`, `facebook`, `twitch`, `twitter`, `other` |
+| `method` | `oauth`, `screenshot` |
+| `external_account_id` | Provider account/channel ID if available |
+| `account_name` | Channel/account name |
+| `account_url` | Public profile URL |
+| `status` | `pending`, `verified`, `failed`, `revoked` |
+| `failure_reason` | Reason if failed |
+| `verified_at` | Verified timestamp |
+| `created_at` | Created timestamp |
+| `updated_at` | Updated timestamp |
+
+#### `creator_payments`
+
+The core V0 payment object.
+
+Fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Payment ID |
+| `campaign_match_id` | Linked campaign match |
+| `campaign_id` | Denormalized campaign ID for filtering |
+| `creator_profile_id` | Creator to be paid |
+| `brand_client_id` | Client, if available |
+| `payee_account_id` | Receiving account used |
+| `amount_cents` | Payment amount in minor units |
+| `currency` | Currency, default USD |
+| `status` | Payment status |
+| `source_amount_snapshot` | Confirmed match price at creation |
+| `note` | Admin note |
+| `failure_reason` | Failure reason if failed |
+| `paid_at` | Paid timestamp |
+| `created_by_user_id` | Admin who created payment |
+| `updated_by_user_id` | Last updater |
+| `created_at` | Created timestamp |
+| `updated_at` | Updated timestamp |
+
+#### `payment_events`
+
+Append-only status and note history for payments.
+
+Fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Event ID |
+| `payment_id` | Linked payment |
+| `actor_user_id` | Actor, if available |
+| `event_type` | `created`, `status_changed`, `note_added`, `payee_account_changed` |
+| `from_status` | Previous status |
+| `to_status` | New status |
+| `metadata` | JSON metadata |
+| `created_at` | Created timestamp |
+
+## 8. Payment Status Model
+
+Payment status should reflect Collab's operations workflow, not a general wallet withdrawal lifecycle.
 
 ```text
-我的钱包
+draft
+-> pending_payee_info
+-> ready_to_pay
+-> invoiced
+-> paid
+-> failed
+-> canceled
 ```
 
-### 5.3 页面布局
+Status definitions:
 
-页面由以下区域组成：
-
-```text
-顶部说明条
-收益概览卡片
-结算记录 Tab
-筛选区
-记录列表 / 空状态
-```
-
-## 6. 页面功能说明
-
-### 6.1 顶部说明条
-
-#### 展示内容
-
-用于说明平台付款方式、付款服务商和收款账户类型。
-
-示例文案：
-
-```text
-付款由平台直接发起，我们使用第三方付款服务商完成打款。提现成功后，款项将根据您选择的付款方式支付至您的银行账户或 PayPal 账户。
-```
-
-#### 功能要求
-
-- 支持关闭提示。
-- 关闭后本次会话不再展示。
-- 可配置是否永久关闭。
-- 支持后台配置文案。
-
-### 6.2 总金额卡片
-
-#### 字段
-
-```text
-总金额
-币种：USD
-金额：0.00
-```
-
-#### 定义
-
-总金额表示用户在平台产生的累计收益金额。
-
-建议公式：
-
-```text
-总金额 = 待结算金额 + 已到账金额 + 已提现金额 + 提现中金额 - 已扣减金额
-```
-
-如果业务希望简化，也可以定义为：
-
-```text
-总金额 = 历史累计确认收益
-```
-
-#### 产品建议
-
-文案建议使用：
-
-```text
-累计收益
-```
-
-而不是“总金额”，避免用户误解为当前钱包余额。
-
-### 6.3 可提现余额卡片
-
-#### 字段
-
-```text
-可提现余额
-币种：USD
-金额：0.00
-提现按钮
-```
-
-#### 定义
-
-可提现余额表示用户当前可以发起提现的金额。
-
-建议公式：
-
-```text
-可提现余额 = 已到账未提现金额 - 冻结金额 - 不可提现金额
-```
-
-#### 提现按钮状态
-
-| 状态 | 按钮表现 | 说明 |
+| Status | Meaning | Creator Visible |
 | --- | --- | --- |
-| 可提现 | 高亮可点击 | 用户满足提现条件 |
-| 余额不足 | 置灰不可点 | 未达到最低提现金额 |
-| 未认证 | 可点击或置灰 | 引导完成认证 |
-| 未绑定账户 | 可点击或置灰 | 引导绑定收款账户 |
-| 风控冻结 | 置灰不可点 | 展示冻结原因 |
+| `draft` | Admin created payment but information is incomplete | No |
+| `pending_payee_info` | Creator must complete profile/account before payment can proceed | Yes |
+| `ready_to_pay` | Payee information is complete and Admin can proceed | Yes |
+| `invoiced` | Payment has entered finance/manual payment handling | Yes |
+| `paid` | Admin confirmed payment completed | Yes |
+| `failed` | Payment failed and needs follow-up | Yes |
+| `canceled` | Payment is canceled because collaboration no longer requires payment | Optional |
 
-## 7. 结算记录
+Allowed transitions:
 
-### 7.1 Tab 分类
-
-页面包含 3 个 Tab：
-
-```text
-待结算
-已到账
-已提现
-```
-
-建议扩展为：
-
-```text
-待结算
-已到账
-提现中
-已提现
-```
-
-如果一期保持截图一致，可先保留 3 个。
-
-### 7.2 待结算
-
-#### 定义
-
-收益已经产生，但尚未完成平台结算。
-
-#### 记录字段
-
-| 字段 | 说明 |
+| From | To |
 | --- | --- |
-| 收益日期 | 收益产生时间 |
-| 收益来源 | 任务、广告、活动或合作项目 |
-| 预估金额 | 当前预计可结算金额 |
-| 币种 | 默认 USD |
-| 预计结算时间 | 预计转入已到账的时间 |
-| 状态 | 待结算 |
-| 备注 | 异常说明或规则说明 |
+| `draft` | `pending_payee_info`, `ready_to_pay`, `canceled` |
+| `pending_payee_info` | `ready_to_pay`, `canceled` |
+| `ready_to_pay` | `invoiced`, `canceled` |
+| `invoiced` | `paid`, `failed`, `canceled` |
+| `failed` | `ready_to_pay`, `canceled` |
+| `paid` | no normal transition in V0 |
+| `canceled` | no normal transition in V0 |
 
-#### 状态说明
+`paid` should be treated as terminal in V0. If a paid record was wrong, Admin should create an audit note or future reversal flow rather than editing it silently.
 
-```text
-待结算收益可能因数据校验、退款、作弊流量、活动规则等原因发生变化。
-```
+## 9. Payment Creation Rules
 
-### 7.3 已到账
+Admin can create a payment from a `CampaignMatch` when:
 
-#### 定义
+1. Match status is `client_confirmed`, `content_pending`, or `collaborated`.
+2. Match has `confirmedPrice` or Admin enters a payment amount manually.
+3. Creator profile exists.
+4. There is no active payment for the same `campaign_match_id`, unless Admin explicitly creates an additional payment in a future split-payment feature.
 
-收益已经完成结算，并进入钱包余额。
+Initial status:
 
-#### 记录字段
+- If creator has no complete payee profile or verified receiving account: `pending_payee_info`.
+- If creator payee data is complete: `ready_to_pay`.
 
-| 字段 | 说明 |
-| --- | --- |
-| 到账时间 | 收益入账时间 |
-| 结算单号 | 平台内部结算编号 |
-| 收益来源 | 对应任务或合作项目 |
-| 到账金额 | 实际入账金额 |
-| 币种 | 默认 USD |
-| 状态 | 已到账 |
-| 详情 | 查看结算明细 |
-
-### 7.4 已提现
-
-#### 定义
-
-用户已经成功提现或提交过提现申请的记录。
-
-建议实际包含以下提现状态：
+Amount rule:
 
 ```text
-审核中
-付款处理中
-提现成功
-提现失败
-已取消
+Default payment amount = CampaignMatch.confirmedPrice
 ```
 
-#### 记录字段
+If Admin overrides the amount, the UI must require a note.
 
-| 字段 | 说明 |
-| --- | --- |
-| 申请时间 | 用户提交提现的时间 |
-| 提现单号 | 平台提现编号 |
-| 提现金额 | 用户申请提现金额 |
-| 手续费 | 如有则展示 |
-| 实际到账金额 | 扣除手续费后的金额 |
-| 收款方式 | PayPal / 银行账户 |
-| 收款账户 | 脱敏展示 |
-| 状态 | 审核中 / 成功 / 失败 |
-| 完成时间 | 打款完成时间 |
-| 失败原因 | 失败时展示 |
+## 10. Admin Payment Tracker Requirements
 
-## 8. 日期筛选
+### 10.1 Payment List
 
-### 8.1 筛选项
+Required columns:
 
-```text
-开始日期
-结束日期
-```
+- Creator.
+- Campaign.
+- Brand/client.
+- Amount.
+- Currency.
+- Status.
+- Payee readiness.
+- Payment account summary.
+- Last updated.
+- Admin note.
 
-### 8.2 规则
+Required filters:
 
-- 默认展示最近 30 天记录。
-- 支持自定义日期范围。
-- 开始日期不能晚于结束日期。
-- 最大查询跨度建议限制为 12 个月。
-- 无记录时展示空状态。
+- Status.
+- Campaign.
+- Creator.
+- Payee readiness.
+- Date range.
 
-## 9. 提现功能
+### 10.2 Create Payment
 
-### 9.1 提现前置条件
+Admin should be able to:
 
-用户发起提现前，需要满足：
+- Select a confirmed match.
+- Review creator, campaign, and confirmed price.
+- Create a payment record.
+- See whether payee info is missing.
 
-```text
-可提现余额 > 0
-达到最低提现金额
-已完成身份认证
-已绑定有效收款账户
-账户未被冻结
-无未处理的风控异常
-```
+### 10.3 Status Update
 
-### 9.2 提现入口
+Admin can update:
 
-点击“提现”按钮后，根据用户状态进入不同流程。
+- `ready_to_pay -> invoiced`
+- `invoiced -> paid`
+- `invoiced -> failed`
+- `failed -> ready_to_pay`
+- eligible statuses -> `canceled`
 
-#### 情况一：未绑定收款账户
+Failure requires a reason.
 
-跳转或弹窗提示：
+Paid requires:
 
-```text
-请先绑定 PayPal 或银行账户后再提现。
-```
+- Payment date.
+- Optional external reference number.
+- Optional note.
 
-操作按钮：
+Every status change must write `payment_events` and `activity_logs`.
 
-```text
-去绑定
-取消
-```
+## 11. Payee Center Requirements
 
-#### 情况二：未完成认证
+### 11.1 Personal Info
 
-提示：
+Creator can maintain:
 
-```text
-请完成身份认证后再发起提现。
-```
+- Name.
+- Phone number.
+- Country/region.
+- Province/city/state where relevant.
+- Address.
 
-操作按钮：
+V0 validation:
 
-```text
-去认证
-取消
-```
+- Name required.
+- Country required.
+- Address required before account can be submitted.
 
-#### 情况三：余额不足
+Personal Info is not full KYC in V0. The UI should not imply government identity verification unless that process exists.
 
-提示：
+### 11.2 Account Verification
 
-```text
-当前可提现余额不足，最低提现金额为 USD 50.00。
-```
+Creator can verify social accounts.
 
-#### 情况四：满足提现条件
+Supported V0:
 
-进入提现申请页或弹窗。
+- YouTube OAuth.
+- Screenshot fallback for all platforms.
 
-### 9.3 提现申请页
+Rules:
 
-#### 字段
+- Same platform can have multiple accounts in the future, but V0 may show one primary verified account per platform.
+- OAuth verification should save provider account ID, name, URL, method, status, and timestamp to D1.
+- Screenshot verification creates `pending` status and requires Admin review in a later iteration.
 
-| 字段 | 说明 |
-| --- | --- |
-| 可提现余额 | 当前可提现金额 |
-| 提现金额 | 用户输入金额 |
-| 收款方式 | PayPal / 银行账户 |
-| 收款账户 | 用户选择账户 |
-| 手续费 | 如有展示 |
-| 实际到账金额 | 提现金额 - 手续费 |
-| 预计到账时间 | 根据付款渠道展示 |
-| 备注 | 可选 |
+OAuth privacy requirement:
 
-#### 提现金额规则
+- The UI must match the actual OAuth scopes requested.
+- If the system only needs channel ownership, request only YouTube readonly scope.
+- If analytics access is requested later, it must be explained separately and should not be presented as simple account verification.
 
-- 不能为空。
-- 必须大于 0。
-- 不能超过可提现余额。
-- 不能低于最低提现金额。
-- 最多保留 2 位小数。
-- 币种默认为 USD。
+### 11.3 Receiving Account
 
-### 9.4 提现确认
+Creator can add a SWIFT receiving account.
 
-用户点击提交前，需要展示确认信息：
+V0 fields:
 
-```text
-提现金额：USD 100.00
-手续费：USD 2.00
-实际到账：USD 98.00
-收款方式：PayPal
-收款账户：a***@email.com
-预计到账：1-3 个工作日
-```
-
-按钮：
-
-```text
-确认提现
-返回修改
-```
-
-### 9.5 提现状态
-
-提现单状态建议如下：
-
-| 状态 | 含义 |
-| --- | --- |
-| 待审核 | 提现申请已提交，等待平台审核 |
-| 审核拒绝 | 平台拒绝提现申请 |
-| 付款处理中 | 已提交给付款服务商 |
-| 付款成功 | 付款服务商确认出款成功 |
-| 付款失败 | 出款失败，金额退回钱包 |
-| 已取消 | 用户或平台取消申请 |
-
-## 10. 金额规则
-
-### 10.1 金额精度
-
-- 默认币种：USD。
-- 金额保留 2 位小数。
-- 后端计算金额，前端只展示。
-- 所有金额使用整数分存储，避免浮点误差。
-
-示例：
-
-```text
-USD 12.34 存储为 1234
-```
-
-### 10.2 金额类型
-
-| 金额 | 说明 |
-| --- | --- |
-| 待结算金额 | 尚未完成结算的收益 |
-| 已到账金额 | 已完成结算的收益 |
-| 可提现余额 | 当前可申请提现的金额 |
-| 冻结金额 | 已提交提现但未完成的金额 |
-| 已提现金额 | 历史成功提现金额 |
-| 扣减金额 | 违规、退款、修正产生的扣减 |
-
-## 11. 空状态设计
-
-### 11.1 待结算为空
-
-```text
-暂无待结算记录
-```
-
-辅助说明：
-
-```text
-收益产生后，将先显示在这里。
-```
-
-### 11.2 已到账为空
-
-```text
-暂无到账记录
-```
-
-辅助说明：
-
-```text
-结算完成后的收益会进入可提现余额。
-```
-
-### 11.3 已提现为空
-
-```text
-暂无提现记录
-```
-
-辅助说明：
-
-```text
-成功提交提现后，记录会显示在这里。
-```
-
-## 12. 异常场景
-
-### 12.1 支付服务商出款失败
-
-处理逻辑：
-
-```text
-提现状态改为付款失败
-释放冻结金额
-金额退回可提现余额
-展示失败原因
-允许用户重新提现
-```
-
-### 12.2 用户收款账户无效
-
-处理逻辑：
-
-```text
-提现申请失败
-提示用户修改收款账户
-记录失败原因
-```
-
-### 12.3 风控冻结
-
-处理逻辑：
-
-```text
-提现按钮置灰
-展示冻结提示
-引导用户联系平台
-```
-
-### 12.4 结算金额调整
-
-处理逻辑：
-
-```text
-生成调整流水
-更新总金额
-更新可提现余额
-保留调整原因
-```
-
-## 13. 权限与安全
-
-### 13.1 身份校验
-
-- 用户必须登录后访问钱包。
-- 钱包数据只能查看本人账户。
-- 所有提现操作需要二次校验。
-
-### 13.2 敏感信息脱敏
-
-PayPal：
-
-```text
-a***@gmail.com
-```
-
-银行账户：
-
-```text
-**** **** **** 1234
-```
-
-### 13.3 操作日志
-
-需要记录：
-
-- 查看钱包
-- 发起提现
-- 修改收款账户
-- 提现审核
-- 提现失败
-- 手动调整金额
-
-## 14. 后台管理需求
-
-后台需要支持：
-
-- 查询用户钱包
-- 查看收益流水
-- 查看提现申请
-- 审核提现
-- 拒绝提现
-- 手动调整余额
-- 冻结账户
-- 解冻账户
-- 导出提现记录
-- 导出结算记录
-
-## 15. 数据结构建议
-
-### 15.1 钱包账户表
-
-```text
-wallet_account
-```
-
-核心字段：
-
-```text
-id
-user_id
-currency
-total_amount
-available_amount
-frozen_amount
-withdrawn_amount
-status
-created_at
-updated_at
-```
-
-### 15.2 钱包流水表
-
-```text
-wallet_transaction
-```
-
-核心字段：
-
-```text
-id
-user_id
-wallet_id
-transaction_no
-type
-amount
-currency
-status
-source_type
-source_id
-description
-created_at
-updated_at
-```
-
-type 示例：
-
-```text
-pending_income
-settled_income
-withdraw_freeze
-withdraw_success
-withdraw_failed
-adjustment
-deduction
-```
-
-### 15.3 提现申请表
-
-```text
-withdraw_order
-```
-
-核心字段：
-
-```text
-id
-user_id
-withdraw_no
-amount
-fee
-actual_amount
-currency
-payment_method
-payment_account_id
-status
-failure_reason
-provider
-provider_order_no
-created_at
-updated_at
-completed_at
-```
-
-## 16. 埋点需求
-
-建议埋点：
-
-| 事件 | 说明 |
-| --- | --- |
-| wallet_page_view | 访问钱包页 |
-| wallet_tab_click | 点击结算记录 Tab |
-| wallet_date_filter | 使用日期筛选 |
-| withdraw_button_click | 点击提现 |
-| withdraw_submit | 提交提现申请 |
-| withdraw_success | 提现申请成功 |
-| withdraw_fail | 提现申请失败 |
-| bind_account_click | 点击绑定账户 |
-| wallet_empty_view | 展示空状态 |
-
-## 17. 核心指标
-
-### 17.1 用户指标
-
-- 钱包页访问人数
-- 提现按钮点击率
-- 提现申请提交率
-- 提现成功率
-- 提现失败率
-- 收款账户绑定率
-
-### 17.2 业务指标
-
-- 总结算金额
-- 可提现金额
-- 提现中金额
-- 已提现金额
-- 平均提现到账时长
-- 失败提现金额
-- 人工审核占比
-
-## 18. 一期 MVP 建议
-
-一期可以先做最小闭环：
-
-```text
-钱包首页
-收益概览
-待结算 / 已到账 / 已提现
-日期筛选
-提现申请
-提现记录
-收款账户校验
-基础后台审核
-```
-
-暂缓：
-
-```text
-多币种
-复杂手续费
-自动税务
-高级风控
-财务报表
-批量付款
-```
-
-## 19. 产品结论
-
-该钱包功能的本质是一个收益结算与提现系统。
-
-核心产品链路是：
-
-```text
-收益产生
--> 待结算
--> 已到账
--> 可提现
--> 提现申请
--> 冻结金额
--> 平台审核
--> 第三方出款
--> 提现完成
-```
-
-设计时最重要的是把资金状态定义清楚，尤其是：
-
-```text
-总金额是什么
-可提现余额怎么算
-待结算什么时候到账
-提现失败怎么退回
-每一笔钱如何追溯
-```
-
-只要这几个问题定义清楚，前端页面、后端状态机、财务对账和用户体验都会稳定很多。
+- Beneficiary name.
+- Country.
+- Transfer method: SWIFT.
+- Account currency.
+- Bank name.
+- Bank country/region.
+- Account number or IBAN.
+- SWIFT/BIC code.
+- Bank address.
+- Beneficiary address.
+
+Rules:
+
+- Account number/IBAN must be encrypted at rest.
+- UI shows only masked account details.
+- Creator can have one active receiving account in V0.
+- Admin can see masked details by default.
+- Full sensitive details, if supported, must require elevated permission and audit logging.
+
+### 11.4 Payments View
+
+Creator sees payment records grouped by:
+
+- `Pending Payment`: `pending_payee_info`, `ready_to_pay`, `invoiced`.
+- `Paid`: `paid`.
+- `Action Required`: `failed`.
+
+Creator should not see internal Admin notes unless explicitly marked creator-visible.
+
+## 12. Security And Compliance
+
+Minimum V0 requirements:
+
+- Creator can only view their own Payee Center.
+- Admin APIs must enforce server-side authorization.
+- Sensitive receiving account fields must be encrypted at rest.
+- Account numbers must be masked in UI.
+- OAuth must use `state` to prevent CSRF.
+- OAuth tokens should not be stored unless needed. If stored, define retention and revocation behavior.
+- Every payment status change must have an audit trail.
+
+## 13. Migration From Current Demo
+
+Current implementation gaps:
+
+- `/admin/payments` uses localStorage demo data.
+- `/portal/payee` uses localStorage for personal info, social verification, and receiving account data.
+- D1 schema has no payment, payee account, or social verification tables.
+- Payment status currently uses `pending`, `invoiced`, `paid`, `failed`, `refunded`; V0 platform workflow needs payee readiness states.
+
+Migration plan:
+
+1. Add D1 tables for payee profiles, payee accounts, social verifications, creator payments, and payment events.
+2. Replace localStorage payment tracker with D1-backed Admin APIs.
+3. Replace localStorage Payee Center with authenticated Creator APIs.
+4. Connect payment creation to `campaign_matches`.
+5. Add activity logging for payment creation and status changes.
+6. Update Payee Center copy from wallet/withdrawal language to payment/receiving account language.
+
+## 14. Acceptance Criteria
+
+V0 is acceptable when:
+
+1. Admin can create a payment from a confirmed campaign match.
+2. Payment amount defaults from match confirmed price.
+3. If payee info is missing, payment status becomes `pending_payee_info`.
+4. Creator can save personal info to D1.
+5. Creator can add a SWIFT receiving account to D1.
+6. Receiving account is masked in UI.
+7. Creator can complete YouTube OAuth verification and the result persists in D1.
+8. Admin can move a payment through `ready_to_pay`, `invoiced`, `paid`, and `failed`.
+9. Failed payment requires a failure reason.
+10. Paid payment records payment date.
+11. Creator can see pending, paid, and failed payment records.
+12. Creator cannot see other creators' payment records.
+13. Admin payment status changes create payment events and activity logs.
+14. Refreshing the browser does not lose payment, payee, or verification data.
+
+## 15. Later Versions
+
+### V1
+
+- Admin review for screenshot verification.
+- Multiple receiving accounts.
+- PayPal receiving account.
+- Payment reference number and attachment upload.
+- Basic export for finance.
+
+### V2
+
+- Real payment provider integration.
+- Provider webhook status sync.
+- Reconciliation import.
+- Payment retry workflow.
+- Finance role separation.
+
+### V3
+
+- Full wallet balance.
+- Creator-initiated withdrawals.
+- Ledger with freeze/unfreeze semantics.
+- Tax and compliance workflows.
+- Multi-currency FX handling.

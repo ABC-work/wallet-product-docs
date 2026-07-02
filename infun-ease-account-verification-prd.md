@@ -1,5 +1,12 @@
 # PRD：InfunEase / Youdao Ads 账户资料与社交账号验证模块
 
+> Scope note, 2026-07-02:
+> This document is now a Payee Center submodule reference for the Collab
+> platform. The platform-level source of truth is `README.md`. Personal Info,
+> Social Account Verification, and Receiving Account collection should support
+> creator payment readiness for confirmed campaign matches; they should not imply
+> a full wallet balance or creator-initiated withdrawal product in V0.
+
 版本：V1.0  
 日期：2026-06-30  
 产品范围：支付系统中的个人资料、收款账户添加、社交媒体账号验证  
